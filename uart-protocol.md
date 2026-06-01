@@ -1,6 +1,6 @@
-# UART Protocol
+# Pico Encoder Panel UART Protocol
 
-The Pico encoder panel sends one newline-terminated text packet per event.
+The Raspberry Pi Pico encoder panel sends newline-terminated text packets to the Teensy 4.1 main controller.
 
 Baud rate:
 
@@ -16,15 +16,15 @@ PANEL=0 ENC=3 EVENT=TURN VALUE=1 POS=127
 
 | Field | Meaning |
 |---|---|
-| PANEL | Encoder panel ID |
-| ENC | Encoder number local to that panel |
-| EVENT | Event type |
-| VALUE | Movement delta |
-| POS | Raw running encoder position |
+| `PANEL` | Encoder-panel ID |
+| `ENC` | Encoder number local to the panel |
+| `EVENT` | Event type |
+| `VALUE` | Movement delta for the event |
+| `POS` | Raw running encoder position |
 
-`POS` lets the receiver recover missed encoder movement if a UART packet is lost.
+`POS` allows the Teensy to recover missed encoder movement. If a packet is lost, the Teensy can compare the latest `POS` value with the previously received position.
 
-## Button Events
+## Pushbutton Events
 
 ```text
 PANEL=0 ENC=3 EVENT=PRESS VALUE=0
@@ -35,13 +35,26 @@ PANEL=0 ENC=3 EVENT=RELEASE VALUE=1 HELD=840
 
 | Event | Meaning |
 |---|---|
-| PRESS | Button pressed |
-| CLICK | Press/release without hold |
-| HOLD | Button held past hold threshold |
-| RELEASE | Button released |
+| `PRESS` | Pushbutton pressed |
+| `CLICK` | Pushbutton pressed and released before the hold threshold |
+| `HOLD` | Pushbutton remains pressed beyond the hold threshold |
+| `RELEASE` | Pushbutton released |
 
 | Field | Meaning |
 |---|---|
-| HELD | Button held time in milliseconds |
+| `VALUE` | Button-event value |
+| `HELD` | Button-held duration in milliseconds |
 
-The Pico owns hardware scanning only. The Teensy owns sequencer state and musical meaning.
+## Panel Ready
+
+```text
+PANEL_READY
+```
+
+The Pico sends this once after startup.
+
+## Ownership
+
+The Pico firmware handles GPIO scanning, quadrature decoding, button debounce, click detection and hold detection.
+
+The Teensy firmware owns sequencer state and assigns musical meaning to the incoming events.

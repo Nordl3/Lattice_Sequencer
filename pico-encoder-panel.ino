@@ -1,8 +1,8 @@
 /*
-  Lattice Sequencer - Pico Encoder Panel
+  Lattice Sequencer - Pico Encoder Panel Firmware
 
-  Reads 8 rotary encoders with push buttons.
-  Sends newline-terminated UART event packets to the main controller.
+  Reads 8 rotary encoders with pushbuttons.
+  Sends newline-terminated UART event packets to the Teensy 4.1 main controller.
   Mirrors the same packets to USB Serial for debugging.
 
   TURN:
