@@ -1,34 +1,34 @@
 # Build Notes
 
-## Firmware
+## Current Firmware
 
-This repository contains two firmware targets:
+Current Teensy main-controller firmware:
+
+```text
+v0.3.7
+```
+
+Firmware targets:
 
 | File | Target |
 |---|---|
-| `pico-encoder-panel.ino` | Raspberry Pi Pico encoder-panel firmware |
-| `teensy-main-controller.ino` | Teensy 4.1 main-controller firmware |
+| `teensy-main-controller.ino` | Teensy 4.1 main controller |
+| `pico-encoder-panel.ino` | Raspberry Pi Pico encoder panel |
 
 The Pico firmware scans the encoder panel and sends UART event packets.
 
-The Teensy firmware runs the sequencer engine, receives Pico events, handles USB MIDI, writes DAC CV outputs, controls gate and trigger timing, updates the OLED, and updates MCP23017 LED outputs.
+The Teensy firmware runs the sequencer engine, receives Pico events, handles USB MIDI, writes four DAC CV outputs, controls gate and trigger timing, updates the OLED, and updates MCP23017 LED outputs.
 
 ## Teensy 4.1 Arduino IDE Settings
-
-Use Teensyduino and select:
 
 ```text
 Board: Teensy 4.1
 USB Type: Serial + MIDI
 ```
 
-The Teensy firmware checks that the selected USB type includes MIDI.
-
 ## Pico Arduino IDE Settings
 
 Upload `pico-encoder-panel.ino` to the Raspberry Pi Pico using the installed Pico Arduino core.
-
-The encoder-panel UART settings are:
 
 ```text
 TX: GP0
@@ -37,8 +37,6 @@ Baud: 115200
 ```
 
 ## Timing Structure
-
-The Teensy firmware separates timing-critical work from low-priority UI work.
 
 Timing-critical work:
 
@@ -56,13 +54,12 @@ Lower-priority work:
 ```text
 Pico UART parsing
 local controls
+pot reads
 MCP23017 LED writes
 OLED redraws
 ```
 
-OLED updates are deferred and transferred in small I2C chunks.
-
-Serial debug output is disabled by default.
+OLED updates are deferred and transferred in small I2C chunks. Serial debug output is disabled by default.
 
 ## Clock Inputs
 
@@ -74,11 +71,13 @@ internal clock
 external pulse clock
 ```
 
-External Clock In and Reset In are logic-level test inputs. Do not patch Eurorack signals directly into the Teensy. Add appropriate input conditioning and protection first.
+External Clock In and Reset In are logic-level test inputs.
 
-## Global Encoder
+Do not patch Eurorack signals directly into the Teensy. Add appropriate input conditioning and protection first.
 
-The global encoder uses:
+## Global Controls
+
+Global encoder:
 
 ```text
 A: pin 36
@@ -86,28 +85,97 @@ B: pin 37
 pushbutton: pin 33
 ```
 
-The encoder A/B lines use table-based quadrature decoding with short interrupt handlers.
+Dedicated pots:
 
-The pushbutton connects between pin 33 and ground. It uses the Teensy internal pull-up and software debounce.
+```text
+clock division: pin 14 / A0
+number of active steps: pin 15 / A1
+```
+
+Buttons:
+
+```text
+EDIT: pin 4
+RUN / STOP: pin 5
+```
 
 ## MCP23017 LEDs
 
 ```text
-GPA0-GPA7: active playhead LEDs
-GPB7-GPB0: step enabled LEDs
+GPA0–GPA7: active playhead LEDs
+GPB7–GPB0: step-enabled LEDs
 ```
 
 The enabled-state LED order is intentionally reversed to match the physical LED wiring.
 
-## DACs
+## DAC Section
 
-The firmware currently targets two MCP4822 dual DACs:
+The current prototype uses:
 
 ```text
-DAC Left A: CV1 / Pitch
-DAC Left B: CV2 / Velocity
-DAC Right A: CV3
-DAC Right B: CV4
+2 x DAC8562 dual 16-bit DACs
+2 x 74AHCT125N quad buffers
+5 V DAC and shifter rail
 ```
 
-The DAC write path remains inside the high-priority sequencer render path.
+Four CV lanes:
+
+```text
+DAC1 VOUTA: CV1 / pitch
+DAC1 VOUTB: CV2 / velocity
+DAC2 VOUTA: CV3
+DAC2 VOUTB: CV4
+```
+
+Shared DAC signals:
+
+```text
+DIN
+SCLK
+/LDAC
+```
+
+Dedicated DAC signals:
+
+```text
+DAC1 /SYNC
+DAC2 /SYNC
+```
+
+The Teensy writes all four input buffers before pulsing shared `/LDAC`, giving simultaneous analogue updates.
+
+## Breadboard Status
+
+The ±12 V analogue-conditioning breadboards have been disconnected temporarily and set aside. Current work is focused on the main brain, front-panel control logic, I/O planning, module width, and PCB stack structure.
+
+Likely panel architecture:
+
+```text
+right side:
+  4x4 encoder grid
+
+left side:
+  OLED
+  controls
+  jacks and other panel I/O
+  Teensy main-brain PCB layer
+  Eurorack analogue-conditioning PCB layer
+  front-panel hardware PCB layer
+  PCB front panel
+```
+
+## Next Firmware Task
+
+Add non-volatile state persistence:
+
+```text
+save last state
+restore last state on power-up
+hold a button during power-up to restore defaults
+```
+
+## Hardware Review Task
+
+Review the 3.3 V-to-5 V logic translation stage before PCB layout.
+
+The current two-chip 74AHCT125N implementation works, but a cleaner part with a better channel-count fit and fewer configuration connections may simplify the final PCB.

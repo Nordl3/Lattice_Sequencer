@@ -1,53 +1,82 @@
 # Lattice Sequencer
 
-Lattice Sequencer is a 16-step Eurorack/MIDI hardware sequencer built around a 4x4 encoder grid, four control-voltage outputs, gate and trigger outputs, MIDI sync, OLED feedback, and direct per-step editing.
+Lattice Sequencer is a Eurorack/MIDI hardware sequencer built around a Teensy 4.1 main controller, Raspberry Pi Pico encoder panels, a 4×4 encoder-grid front-panel concept, four analogue CV lanes, gate and trigger outputs, MIDI sync, OLED feedback, and direct per-step editing.
 
-Each encoder/button represents one step or grid cell. Each step stores pitch, velocity, gate length, and additional CV values. The playhead moves through the grid and renders the active step to the CV, gate, trigger, LED, and display outputs.
+The long-term front panel is centred on a 4×4 grid of rotary encoders with pushbuttons. The current breadboard firmware is an 8-step working prototype using one Pico encoder panel while the main-brain hardware and panel layout are developed.
 
-## Overview
+## Current Prototype
 
-Lattice is a grid-based step sequencer for controlling Eurorack voices and MIDI-synchronised hardware. The front panel is centred on a 4x4 grid of rotary encoders with push buttons. The grid can be used as a conventional 16-step sequencer or as a spatial control surface for non-linear playhead movement.
-
-The sequencer is designed around direct per-step access. Pitch, velocity, gate length, and modulation values are stored per step. Editing is performed from the encoder assigned to the relevant step or cell.
-
-## 4x4 Grid
-
-The grid layout is:
+Current Teensy firmware version:
 
 ```text
-0   1   2   3
-4   5   6   7
-8   9   10  11
-12  13  14  15
+0.3.7
 ```
 
-The same grid can be addressed in several ways:
+The present breadboard build includes:
 
-- linear step order
-- reverse step order
-- ping-pong movement
-- random enabled-cell selection
-- snake/grid paths
-- Cartesian X/Y movement
-- Euclidean gate patterns
-- split-sequencer operation
-- manual cell selection
-- held/frozen cell behaviour
+- Teensy 4.1 main controller
+- one Raspberry Pi Pico 8-encoder panel
+- two DAC8562 dual 16-bit DACs for four CV outputs
+- two 74AHCT125N buffers translating Teensy 3.3 V control signals to 5 V DAC logic
+- DAC8562 analogue and logic supply from the 5 V rail
+- shared `/LDAC` update line for simultaneous four-channel CV changes
+- SSD1306 OLED feedback display
+- MCP23017-driven playhead and enabled-step LEDs
+- USB MIDI clock and transport sync
+- internal clock
+- external clock and reset test inputs
+- EDIT button
+- RUN/STOP button
+- global menu encoder and button
+- dedicated clock-division pot
+- dedicated active-step-count pot
 
-## Step Data
+The ±12 V Eurorack conditioning breadboards are temporarily disconnected while main-brain firmware and front-panel hardware planning continue.
 
-Each step can store:
+## Current Controls
 
-| Parameter | Description |
+| Control | Function |
 |---|---|
-| Pitch | Chromatic note value for CV1 |
-| Velocity | Secondary CV value for CV2 |
-| Gate length | Per-step gate duration |
-| CV3 | Additional modulation CV |
-| CV4 | Additional modulation CV |
-| Enabled state | Step active/muted state |
+| Step encoder turn | Edit the selected parameter for that step |
+| Step encoder click | Enable or disable the step |
+| EDIT button | Cycle the selected edit lane |
+| RUN/STOP button | Start or stop the sequencer |
+| Global encoder turn | Adjust the selected global-menu setting |
+| Global encoder button | Reveal or advance the global menu |
+| Clock-division pot | Select clock division |
+| Number-of-steps pot | Select active sequence length |
 
-The first CV output is intended for pitch or a primary control voltage. The other CV outputs are general-purpose lanes that can be patched to velocity, level, filter cutoff, resonance, modulation depth, waveshape, or any other Eurorack destination.
+Global encoder menu:
+
+```text
+BPM
+CLOCK
+PLAY
+KEY
+SCALE
+QUANT
+```
+
+The first global-button press after the OLED returns home reveals the current menu item without advancing. Further presses advance while the menu remains visible.
+
+## Edit Lanes
+
+```text
+PITCH
+VELOCITY
+GATE
+CV3
+CV4
+```
+
+## Playback Modes
+
+```text
+FWD
+REV
+PING
+RAND
+```
 
 ## Outputs
 
@@ -60,368 +89,115 @@ The first CV output is intended for pitch or a primary control voltage. The othe
 | Gate | Per-step gate output |
 | Trigger | Per-step trigger pulse |
 
-Digital gate and trigger outputs are generated separately from the DAC outputs. DAC channels are used only for analogue CV lanes.
+CV1 is rendered as a basic 1 V/oct pitch output over approximately 0–4 V. CV2, CV3, and CV4 use the DAC8562 nominal 0–5 V span. Final Eurorack scaling, calibration, and protection remain part of the analogue-conditioning stage.
+
+## DAC Hardware
+
+The prototype CV section uses:
+
+```text
+Teensy 4.1 SPI
+    -> 74AHCT125N level shifting
+    -> 2 x DAC8562 dual 16-bit DACs
+    -> 4 simultaneous CV outputs
+```
+
+The DAC8562 internal 2.5 V references are enabled during startup. The DACs use ×2 gain for a nominal 0–5 V raw output range. Each DAC has its own `/SYNC` line. Both DACs share `DIN`, `SCLK`, and `/LDAC`.
+
+The firmware writes all four DAC input buffers and then pulses the shared `/LDAC` line so the four analogue channels update together.
 
 ## MIDI
 
-Lattice supports MIDI transport and clock sync.
+USB MIDI is used for development and Ableton Live sync.
 
-Supported MIDI transport behaviour:
+Supported USB MIDI behaviour:
 
 | MIDI message | Behaviour |
 |---|---|
 | Start | Reset playhead and begin playback |
-| Stop | Stop playback and turn off gate/trigger |
+| Stop | Stop playback and turn off gate and trigger |
 | Continue | Resume playback |
-| Clock | Advance according to selected clock division |
+| Clock | Advance according to the selected clock division |
+| Note On / Off | Temporary pitch transpose |
 
-USB MIDI is used for development and direct DAW sync. DIN MIDI input/output is part of the hardware direction for standalone use with external MIDI devices.
-
-## Clock and Timing
-
-The sequencer advances from MIDI clock, internal timing, or Eurorack clock input depending on the hardware/firmware configuration.
-
-Timing controls include:
-
-- clock division
-- sequence length
-- gate length
-- trigger length
-- playback direction
-- reset behaviour
-- start/stop handling
-
-Useful clock divisions include straight and dotted values that map cleanly to MIDI clock timing.
-
-## Playback Modes
-
-### Forward
-
-Steps advance from low to high.
-
-```text
-0 -> 1 -> 2 -> 3 -> ...
-```
-
-### Reverse
-
-Steps advance from high to low.
-
-```text
-15 -> 14 -> 13 -> 12 -> ...
-```
-
-### Ping-pong
-
-The playhead moves forward and then backward through the active range.
-
-```text
-0 -> 1 -> 2 -> 3 -> 2 -> 1 -> ...
-```
-
-### Random
-
-Random mode selects from enabled steps inside the active range. Disabled steps are excluded from random selection.
-
-### Snake and Grid Paths
-
-Snake and grid-path modes move through the 4x4 grid using stored path shapes rather than a simple linear order. These modes are intended for non-linear melodic and rhythmic movement.
-
-### Cartesian Movement
-
-Cartesian modes use X/Y movement or addressing to select positions in the 4x4 grid. This allows row, column, coordinate, external CV, and reset-based movement schemes.
-
-### Euclidean Gates
-
-Euclidean modes distribute gate or trigger events across a selected length and fill count. Euclidean logic can be applied to gate lanes, trigger lanes, accent behaviour, or step masks.
+DIN MIDI remains part of the hardware direction for standalone use.
 
 ## Hardware Architecture
-
-Lattice uses a distributed input-panel architecture.
 
 ```text
 Pico encoder panels
     -> scan encoders and buttons
-    -> decode quadrature
-    -> debounce buttons
-    -> detect press/release/click/hold
+    -> debounce and decode
     -> send UART event packets
 
 Teensy 4.1 main controller
-    -> receives encoder/button events
-    -> stores sequencer state
-    -> handles MIDI and clocking
-    -> updates the playhead
-    -> writes DAC outputs
+    -> owns sequencer state
+    -> handles MIDI and clocks
+    -> updates DAC outputs
     -> controls gate and trigger timing
-    -> updates OLED feedback
-    -> updates step LEDs
+    -> updates OLED and LEDs
 ```
 
-The encoder panels report hardware events only. The main controller owns all musical state.
+The Pico panels report hardware events only. Musical state remains on the Teensy.
 
-## Main Controller
-
-The main controller is a Teensy 4.1.
-
-Main-controller responsibilities:
-
-- sequencer timing
-- MIDI clock and transport handling
-- playhead movement
-- step data storage
-- DAC output
-- gate output
-- trigger output
-- OLED updates
-- LED updates
-- encoder-panel UART input
-- Eurorack clock/reset/CV input handling
-
-## Encoder Panels
-
-Each Raspberry Pi Pico encoder panel handles eight rotary encoders and their push buttons.
-
-Each panel handles:
-
-- encoder GPIO scanning
-- quadrature decoding
-- A/B direction correction
-- button debounce
-- press detection
-- release detection
-- click detection
-- hold detection
-- UART event output
-- USB Serial debug output
-
-Two Pico panels cover the full 16-encoder grid.
-
-## Encoder Event Protocol
-
-The Pico panels send newline-terminated text packets over UART.
-
-Baud rate:
-
-```text
-115200
-```
-
-Encoder turn event:
-
-```text
-PANEL=0 ENC=3 EVENT=TURN VALUE=1 POS=127
-```
-
-Button events:
-
-```text
-PANEL=0 ENC=3 EVENT=PRESS VALUE=0
-PANEL=0 ENC=3 EVENT=CLICK VALUE=1 HELD=180
-PANEL=0 ENC=3 EVENT=HOLD VALUE=1 HELD=600
-PANEL=0 ENC=3 EVENT=RELEASE VALUE=1 HELD=840
-```
-
-Field meanings:
-
-| Field | Meaning |
-|---|---|
-| PANEL | Encoder panel ID |
-| ENC | Encoder number local to that panel |
-| EVENT | Event type |
-| VALUE | Movement delta or button event value |
-| POS | Raw running encoder position |
-| HELD | Button held time in milliseconds |
-
-`POS` allows the main controller to recover missed encoder movement if a UART packet is lost.
-
-## Controls
-
-The panel is based around direct step controls plus global controls.
-
-Per-step controls:
-
-| Control | Function |
-|---|---|
-| Encoder turn | Edit the selected parameter for that step |
-| Encoder click | Enable/disable or select the step |
-| Encoder hold | Secondary step action, such as hold/freeze or alternate edit operation |
-
-Global controls can include:
-
-- edit-lane select
-- play-mode select
-- clock division
-- sequence length
-- run/stop
-- reset
-- shift/alternate function
-- randomise/mutate
-- save/load where supported
-
-## Edit Lanes
-
-The encoder grid can edit different per-step lanes.
-
-Core edit lanes:
-
-```text
-PITCH
-VELOCITY
-GATE
-CV3
-CV4
-```
-
-Pitch uses chromatic note values. The CV-style lanes can be displayed as simple 0-100 values for fast editing or stored at higher internal resolution where required.
-
-## Display
-
-The OLED is used for status feedback.
-
-Typical display content:
-
-- edited parameter
-- edited value
-- note name
-- playback mode
-- edit lane
-- clock division
-- sequence length
-- MIDI start/stop/continue
-- selected step
-- active playhead position
+## OLED Policy
 
 The OLED is a feedback display rather than the primary control surface.
 
-## LED Feedback
+Readability takes priority over information density. The firmware should use the largest practical text and show fewer items at once rather than shrinking important status text.
 
-Step LEDs show sequencer state.
+## Repository Files
 
-Typical LED uses:
+| File | Purpose |
+|---|---|
+| `teensy-main-controller.ino` | Teensy 4.1 main-controller firmware |
+| `pico-encoder-panel.ino` | Raspberry Pi Pico encoder-panel firmware |
+| `pin-map.md` | Current pin assignments and DAC wiring |
+| `uart-protocol.md` | Pico-to-Teensy event protocol |
+| `build-notes.md` | Current hardware notes and next tasks |
+| `CHANGELOG.md` | Version history |
 
-- active playhead position
-- selected step
-- enabled/disabled state
-- gate status
-- held/frozen state
-- edit-lane focus
-- transport status
+## Arduino IDE
 
-LED implementation may use single-colour LEDs, RGB LEDs, or addressable LEDs depending on the hardware build.
+For the Teensy firmware, select:
 
-## DAC Hardware
+```text
+Board: Teensy 4.1
+USB Type: Serial + MIDI
+```
 
-The DAC section provides four analogue CV outputs.
+The Pico panel uses UART:
 
-The prototype hardware path uses dual SPI DACs. Higher-resolution DACs can be used for better pitch accuracy, finer modulation resolution, and calibration.
+```text
+TX: GP0
+RX: GP1
+Baud: 115200
+```
 
-DAC design goals:
+## Versioning
 
-- four independent CV outputs
-- pitch-capable primary CV
-- general-purpose modulation CV lanes
-- clean update timing
-- replaceable DAC layer in firmware
-- output scaling suitable for Eurorack levels
-- calibration support
+Repository filenames remain stable so Git history stays readable:
 
-## Eurorack Signal Levels
+```text
+teensy-main-controller.ino
+pico-encoder-panel.ino
+```
 
-Final Eurorack hardware should provide proper analogue output conditioning.
+Downloadable Arduino-ready ZIP files use versioned folder and sketch names:
 
-CV output stages should handle the required output range, such as:
+```text
+Lattice_Sequencer_Teensy_v0_3_7/
+└── Lattice_Sequencer_Teensy_v0_3_7.ino
+```
 
-- 0-5 V
-- 0-10 V
-- +/-5 V
-- 1 V/oct pitch CV
+Release notes use dotted semantic versions:
 
-Gate and trigger outputs should use suitable output buffering and protection rather than raw microcontroller pins.
+```text
+v0.3.7
+```
 
-## Eurorack Inputs
+Arduino download filenames use underscores:
 
-Useful input types include:
-
-- clock input
-- reset input
-- run/stop input
-- X CV input
-- Y CV input
-- transpose CV input
-- probability/modulation CV input
-- freeze/hold gate input
-
-Clock and reset should be treated as timing-critical digital inputs. Analogue CV inputs should be protected and scaled before reaching the controller ADC.
-
-## Pitch and Calibration
-
-Pitch is stored as chromatic note data and rendered to CV.
-
-The pitch output can operate from a basic volts-per-octave mapping or from a calibration table. Calibration can compensate for DAC gain/offset error, analogue output scaling error, and oscillator tracking differences.
-
-A later self-tuning system can use a VCO audio return signal to measure pitch and build correction data for a connected oscillator.
-
-## Split Operation
-
-The 4x4 grid can also be divided into two related sequencer sections. This allows separate lanes, linked patterns, or independent playheads using the same hardware.
-
-Possible split behaviours:
-
-- upper/lower grid split
-- left/right grid split
-- separate clock divisions
-- separate sequence lengths
-- independent gate behaviour
-- shared or independent CV lanes
-
-## Advanced Sequencing Modes
-
-The grid structure allows modes beyond standard linear sequencing.
-
-Planned advanced modes include:
-
-- snake paths
-- random walk
-- Cartesian X/Y addressing
-- Euclidean gates
-- probability masks
-- ratchets
-- glide/slew
-- Klee-style combined-step behaviour
-- multiple active cells contributing to output
-- pattern mutation
-- CV-addressed step selection
-
-## Firmware Principles
-
-The firmware is designed around non-blocking event handling.
-
-Main principles:
-
-- no blocking delays in sequencer timing
-- short interrupt routines
-- MIDI handled as events
-- encoder panels handled as event sources
-- DAC updates scheduled from sequencer state
-- gate and trigger timing handled independently
-- display updates rate-limited
-- LED updates treated as low priority compared with clocking and CV output
-
-The main controller owns all musical state. Peripheral controllers scan hardware and report events.
-
-## Build Direction
-
-Lattice is intended as a hardware sequencer platform rather than a single fixed sketch. The core architecture supports a staged build:
-
-- 16-step grid control
-- four CV lanes
-- gate and trigger output
-- MIDI sync
-- Eurorack clock/reset
-- OLED feedback
-- LED feedback
-- calibration
-- advanced grid sequencing modes
-
-The design keeps timing-critical outputs on the main controller and moves high-density panel scanning to dedicated input panels.
+```text
+v0_3_7
+```

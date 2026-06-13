@@ -55,6 +55,6 @@ The Pico sends this once after startup.
 
 ## Ownership
 
-The Pico firmware handles GPIO scanning, quadrature decoding, button debounce, click detection and hold detection.
+The Pico firmware handles GPIO scanning, quadrature decoding, button debounce, click detection, and hold detection.
 
-The Teensy firmware owns sequencer state and assigns musical meaning to the incoming events.
+The Teensy firmware owns sequencer state and assigns musical meaning to incoming events.

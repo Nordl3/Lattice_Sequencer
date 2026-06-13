@@ -2,17 +2,17 @@
   Lattice Sequencer - Pico Encoder Panel Firmware
 
   Reads 8 rotary encoders with pushbuttons.
-  Sends newline-terminated UART event packets to the Teensy 4.1 main controller.
+  Sends newline-terminated UART event packets to the Teensy 4.1 controller.
   Mirrors the same packets to USB Serial for debugging.
 
   TURN:
-    PANEL=<id> ENC=<index> EVENT=TURN VALUE=<delta> POS=<position>
+    PANEL= ENC= EVENT=TURN VALUE= POS=
 
   BUTTONS:
-    PANEL=<id> ENC=<index> EVENT=PRESS VALUE=0
-    PANEL=<id> ENC=<index> EVENT=RELEASE VALUE=1 HELD=<ms>
-    PANEL=<id> ENC=<index> EVENT=CLICK VALUE=1 HELD=<ms>
-    PANEL=<id> ENC=<index> EVENT=HOLD VALUE=1 HELD=<ms>
+    PANEL= ENC= EVENT=PRESS VALUE=0
+    PANEL= ENC= EVENT=RELEASE VALUE=1 HELD=
+    PANEL= ENC= EVENT=CLICK VALUE=1 HELD=
+    PANEL= ENC= EVENT=HOLD VALUE=1 HELD=
 */
 
 #include <Arduino.h>
@@ -35,14 +35,14 @@ struct EncoderConfig {
 };
 
 EncoderConfig enc[8] = {
-  { 27, 26, 28 },
-  { 21, 20, 22 },
-  { 18, 17, 19 },
-  { 15, 14, 16 },
-  {  2,  3,  4 },
-  {  5,  6,  7 },
-  {  8,  9, 10 },
-  { 11, 12, 13 }
+  {27, 26, 28},
+  {21, 20, 22},
+  {18, 17, 19},
+  {15, 14, 16},
+  {2, 3, 4},
+  {5, 6, 7},
+  {8, 9, 10},
+  {11, 12, 13}
 };
 
 bool swapAB[8] = {
@@ -93,42 +93,43 @@ void sendTurnEvent(uint8_t encIndex, int delta) {
   char msg[80];
 
   snprintf(
-    msg,
-    sizeof(msg),
-    "PANEL=%u ENC=%u EVENT=TURN VALUE=%d POS=%ld",
-    PANEL_ID,
-    encIndex,
-    delta,
-    encoderPos[encIndex]
-  );
+      msg,
+      sizeof(msg),
+      "PANEL=%u ENC=%u EVENT=TURN VALUE=%d POS=%ld",
+      PANEL_ID,
+      encIndex,
+      delta,
+      encoderPos[encIndex]);
 
   sendLine(msg);
 }
 
-void sendButtonEvent(uint8_t encIndex, const char* eventName, int value, unsigned long heldMs) {
+void sendButtonEvent(
+    uint8_t encIndex,
+    const char* eventName,
+    int value,
+    unsigned long heldMs) {
   char msg[96];
 
   if (strcmp(eventName, "PRESS") == 0) {
     snprintf(
-      msg,
-      sizeof(msg),
-      "PANEL=%u ENC=%u EVENT=%s VALUE=%d",
-      PANEL_ID,
-      encIndex,
-      eventName,
-      value
-    );
+        msg,
+        sizeof(msg),
+        "PANEL=%u ENC=%u EVENT=%s VALUE=%d",
+        PANEL_ID,
+        encIndex,
+        eventName,
+        value);
   } else {
     snprintf(
-      msg,
-      sizeof(msg),
-      "PANEL=%u ENC=%u EVENT=%s VALUE=%d HELD=%lu",
-      PANEL_ID,
-      encIndex,
-      eventName,
-      value,
-      heldMs
-    );
+        msg,
+        sizeof(msg),
+        "PANEL=%u ENC=%u EVENT=%s VALUE=%d HELD=%lu",
+        PANEL_ID,
+        encIndex,
+        eventName,
+        value,
+        heldMs);
   }
 
   sendLine(msg);
@@ -158,12 +159,14 @@ void setupEncoderPanel() {
 
 void handleEncoder(uint8_t i) {
   uint8_t abNow = readAB(i);
+
   if (abNow == lastAB[i]) return;
 
   uint8_t transition = (lastAB[i] << 2) | abNow;
   int8_t movement = quadTable[transition];
 
   lastAB[i] = abNow;
+
   if (movement == 0) return;
 
   rawAccum[i] += movement;
@@ -200,9 +203,11 @@ void handleButton(uint8_t i) {
     if (stableSW[i] == LOW) {
       pressStartTime[i] = now;
       holdSent[i] = false;
+
       sendButtonEvent(i, "PRESS", 0, 0);
     } else {
       unsigned long heldMs = now - pressStartTime[i];
+
       sendButtonEvent(i, "RELEASE", 1, heldMs);
 
       if (!holdSent[i]) {
@@ -216,6 +221,7 @@ void handleButton(uint8_t i) {
 
     if (heldMs >= HOLD_MS) {
       holdSent[i] = true;
+
       sendButtonEvent(i, "HOLD", 1, heldMs);
     }
   }
@@ -229,6 +235,7 @@ void setup() {
   Serial1.begin(UART_BAUD);
 
   delay(1000);
+
   setupEncoderPanel();
 
   sendLine("PANEL_READY");
