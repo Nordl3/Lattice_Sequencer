@@ -8,6 +8,15 @@ Baud rate:
 115200
 ```
 
+The current Teensy build uses two receive-only Pico UART links:
+
+```text
+Top panel Pico TX    -> Teensy Serial5 RX pin 21
+Bottom panel Pico TX -> Teensy Serial8 RX pin 34
+```
+
+The Pico `PANEL` value is not used for top/bottom identification in this build. The Teensy identifies the panel from the UART port.
+
 ## Encoder Turn
 
 ```text
@@ -16,13 +25,13 @@ PANEL=0 ENC=3 EVENT=TURN VALUE=1 POS=127
 
 | Field | Meaning |
 |---|---|
-| `PANEL` | Encoder-panel ID |
-| `ENC` | Encoder number local to the panel |
+| `PANEL` | Encoder-panel ID from the Pico firmware |
+| `ENC` | Encoder number local to the Pico panel, 0-7 |
 | `EVENT` | Event type |
 | `VALUE` | Movement delta for the event |
 | `POS` | Raw running encoder position |
 
-`POS` allows the Teensy to recover missed encoder movement. If a packet is lost, the Teensy can compare the latest `POS` value with the previously received position.
+`POS` allows the Teensy to recover missed encoder movement by comparing the newest position with the previously received position.
 
 ## Pushbutton Events
 
@@ -55,6 +64,27 @@ The Pico sends this once after startup.
 
 ## Ownership
 
-The Pico firmware handles GPIO scanning, quadrature decoding, button debounce, click detection, and hold detection.
+The Pico firmware handles:
 
-The Teensy firmware owns sequencer state and assigns musical meaning to incoming events.
+```text
+GPIO scanning
+quadrature decoding
+button debounce
+click detection
+hold detection
+UART event output
+```
+
+The Teensy firmware owns:
+
+```text
+step data
+playhead state
+clocking
+play mode
+CV rendering
+gate/trigger timing
+display state
+LED state
+physical encoder-to-step mapping
+```

@@ -1,52 +1,108 @@
 # Lattice Sequencer
 
-Lattice Sequencer is a Eurorack/MIDI hardware sequencer built around a Teensy 4.1 main controller, Raspberry Pi Pico encoder panels, a 4×4 encoder-grid front-panel concept, four analogue CV lanes, gate and trigger outputs, MIDI sync, OLED feedback, and direct per-step editing.
+Lattice Sequencer is a 16-step Eurorack/MIDI hardware sequencer built around a 4x4 encoder grid, a Teensy 4.1 main controller, two Raspberry Pi Pico encoder panels, four DAC8562 CV outputs, gate/trigger outputs, OLED status feedback, and MCP23017 LED feedback.
 
-The long-term front panel is centred on a 4×4 grid of rotary encoders with pushbuttons. The current breadboard firmware is an 8-step working prototype using one Pico encoder panel while the main-brain hardware and panel layout are developed.
+This repository contains the current prototype firmware and wiring notes for the working 16-step breadboard build.
 
-## Current Prototype
+## Current Status
 
-Current Teensy firmware version:
+The current main-controller firmware is `v0.3.14`.
+
+Working in the current build:
+
+- 16-step grid control from two Pico encoder panels
+- per-step encoder editing
+- per-step enable/disable from encoder clicks
+- CV1 pitch lane
+- CV2 velocity lane
+- CV3 and CV4 modulation lanes
+- gate and trigger outputs from Teensy GPIO
+- internal clock
+- USB MIDI clock and transport
+- forward, reverse, ping-pong, and random play modes
+- SSD1309 OLED status display on its own I2C bus
+- two MCP23017 LED expanders for step state and playhead
+- DAC8562 four-channel CV output path
+- global menu encoder
+- front-panel pots for sequence length and clock division
+
+Not yet fully validated in this hardware pass:
+
+- external clock input
+- reset input in a full patching setup
+- final Eurorack output/input conditioning
+- connection to a synth voice for final musical output checks
+
+## Hardware Architecture
+
+Lattice uses a split input architecture.
 
 ```text
-0.3.7
+Pico encoder panel A -> Teensy Serial5 RX -> physical encoders 1-8
+Pico encoder panel B -> Teensy Serial8 RX -> physical encoders 9-16
+
+Teensy 4.1:
+  sequencer engine
+  MIDI / clock handling
+  DAC8562 CV output
+  gate / trigger timing
+  OLED feedback
+  MCP23017 LED feedback
 ```
 
-The present breadboard build includes:
+The Pico boards only scan encoders/buttons and send UART events. The Teensy owns all sequencer state.
 
-- Teensy 4.1 main controller
-- one Raspberry Pi Pico 8-encoder panel
-- two DAC8562 dual 16-bit DACs for four CV outputs
-- two 74AHCT125N buffers translating Teensy 3.3 V control signals to 5 V DAC logic
-- DAC8562 analogue and logic supply from the 5 V rail
-- shared `/LDAC` update line for simultaneous four-channel CV changes
-- SSD1306 OLED feedback display
-- MCP23017-driven playhead and enabled-step LEDs
-- USB MIDI clock and transport sync
-- internal clock
-- external clock and reset test inputs
-- EDIT button
-- RUN/STOP button
-- global menu encoder and button
-- dedicated clock-division pot
-- dedicated active-step-count pot
+## 4x4 Step Grid
 
-The ±12 V Eurorack conditioning breadboards are temporarily disconnected while main-brain firmware and front-panel hardware planning continue.
+User-facing step numbers are 1-16:
 
-## Current Controls
+```text
+1   2   3   4
+5   6   7   8
+9   10  11  12
+13  14  15  16
+```
+
+The current firmware includes a top-level encoder-to-step map so the physical encoder board can be corrected without rewriting the sequencer engine.
+
+Current baked mapping:
+
+```text
+physical 5   6   7   8    -> steps 1   2   3   4
+physical 1   2   3   4    -> steps 5   6   7   8
+physical 13  14  15  16   -> steps 9   10  11  12
+physical 9   10  11  12   -> steps 13  14  15  16
+```
+
+## Per-Step Data
+
+Each step stores:
+
+| Lane | Purpose |
+|---|---|
+| Pitch | CV1 pitch value |
+| Velocity | CV2 secondary CV value |
+| Gate | per-step gate length |
+| CV3 | general modulation CV |
+| CV4 | general modulation CV |
+| Enabled | step on/off state |
+
+The LANE button cycles the edited lane. The 16 grid encoders edit the current lane for their assigned step. Encoder clicks toggle the step on/off.
+
+## Front-Panel Controls
 
 | Control | Function |
 |---|---|
-| Step encoder turn | Edit the selected parameter for that step |
-| Step encoder click | Enable or disable the step |
-| EDIT button | Cycle the selected edit lane |
-| RUN/STOP button | Start or stop the sequencer |
-| Global encoder turn | Adjust the selected global-menu setting |
-| Global encoder button | Reveal or advance the global menu |
-| Clock-division pot | Select clock division |
-| Number-of-steps pot | Select active sequence length |
+| 16 grid encoders | edit current lane for steps 1-16 |
+| 16 encoder pushbuttons | toggle step on/off |
+| LANE button | cycle PITCH, VEL, GATE, CV3, CV4 |
+| RUN button | start/stop internal transport |
+| Global encoder | adjust selected global menu item |
+| Global encoder push | show/cycle global menu item |
+| A0 pot | sequence length |
+| A1 pot | clock division |
 
-Global encoder menu:
+Global menu items:
 
 ```text
 BPM
@@ -57,147 +113,84 @@ SCALE
 QUANT
 ```
 
-The first global-button press after the OLED returns home reveals the current menu item without advancing. Further presses advance while the menu remains visible.
+Length and clock division are intentionally controlled by pots and are not in the global menu.
 
-## Edit Lanes
+## Clocking
 
-```text
-PITCH
-VELOCITY
-GATE
-CV3
-CV4
-```
-
-## Playback Modes
+Clock source options:
 
 ```text
-FWD
-REV
-PING
-RAND
+INT
+MIDI
+EXT
 ```
 
-## Outputs
+The default clock source is `INT`.
 
-| Output | Function |
+MIDI clock and transport are available over USB MIDI. External clock support is present in firmware but still needs final hardware validation and input conditioning.
+
+## DAC Outputs
+
+The current CV hardware is based on two DAC8562 dual 16-bit SPI DACs.
+
+| Output | DAC8562 channel |
 |---|---|
-| CV1 | Pitch / primary CV |
-| CV2 | Velocity / secondary CV |
-| CV3 | Modulation CV |
-| CV4 | Modulation CV |
-| Gate | Per-step gate output |
-| Trigger | Per-step trigger pulse |
+| CV1 / Pitch | DAC1 VOUTA |
+| CV2 / Velocity | DAC1 VOUTB |
+| CV3 | DAC2 VOUTA |
+| CV4 | DAC2 VOUTB |
 
-CV1 is rendered as a basic 1 V/oct pitch output over approximately 0–4 V. CV2, CV3, and CV4 use the DAC8562 nominal 0–5 V span. Final Eurorack scaling, calibration, and protection remain part of the analogue-conditioning stage.
+The firmware enables the DAC8562 internal 2.5 V reference and uses x2 gain. `DAC_OUTPUT_MAX_CODE` is currently set to `0xE000` to leave headroom on the present prototype supply.
 
-## DAC Hardware
-
-The prototype CV section uses:
+The DAC8562 backend uses:
 
 ```text
-Teensy 4.1 SPI
-    -> 74AHCT125N level shifting
-    -> 2 x DAC8562 dual 16-bit DACs
-    -> 4 simultaneous CV outputs
+SPI_MODE1
+30 MHz SPI
+24-bit command frames
+shared LDAC pulse after all four CV values are written
 ```
 
-The DAC8562 internal 2.5 V references are enabled during startup. The DACs use ×2 gain for a nominal 0–5 V raw output range. Each DAC has its own `/SYNC` line. Both DACs share `DIN`, `SCLK`, and `/LDAC`.
+## Gate and Trigger Outputs
 
-The firmware writes all four DAC input buffers and then pulses the shared `/LDAC` line so the four analogue channels update together.
+Gate and trigger are generated from Teensy digital outputs.
 
-## MIDI
+| Output | Teensy pin |
+|---|---:|
+| Gate | 2 |
+| Trigger | 3 |
 
-USB MIDI is used for development and Ableton Live sync.
+These pins are firmware outputs. Final Eurorack hardware should buffer and condition them before patching into a modular system.
 
-Supported USB MIDI behaviour:
+## OLED
 
-| MIDI message | Behaviour |
+The current display is a 128x64 SSD1309 I2C OLED at address `0x3C`.
+
+It is connected to the default Teensy I2C bus:
+
+```text
+SDA = pin 18
+SCL = pin 19
+```
+
+The OLED shows status and step on/off grid state. It does not animate the playhead during playback; the hardware LED expanders provide live playhead feedback. This keeps transport timing ahead of display work.
+
+## LED Feedback
+
+Two MCP23017 expanders are used on `Wire2`:
+
+```text
+0x20 = left LED expander, steps 1-8
+0x21 = right LED expander, steps 9-16
+```
+
+Each expander uses one port for playhead LEDs and one port for step enabled/on-off LEDs.
+
+## Firmware Files
+
+| File | Target |
 |---|---|
-| Start | Reset playhead and begin playback |
-| Stop | Stop playback and turn off gate and trigger |
-| Continue | Resume playback |
-| Clock | Advance according to the selected clock division |
-| Note On / Off | Temporary pitch transpose |
+| `teensy-main-controller.ino` | Teensy 4.1 main sequencer firmware |
+| `pico-encoder-panel.ino` | Raspberry Pi Pico encoder panel firmware |
 
-DIN MIDI remains part of the hardware direction for standalone use.
-
-## Hardware Architecture
-
-```text
-Pico encoder panels
-    -> scan encoders and buttons
-    -> debounce and decode
-    -> send UART event packets
-
-Teensy 4.1 main controller
-    -> owns sequencer state
-    -> handles MIDI and clocks
-    -> updates DAC outputs
-    -> controls gate and trigger timing
-    -> updates OLED and LEDs
-```
-
-The Pico panels report hardware events only. Musical state remains on the Teensy.
-
-## OLED Policy
-
-The OLED is a feedback display rather than the primary control surface.
-
-Readability takes priority over information density. The firmware should use the largest practical text and show fewer items at once rather than shrinking important status text.
-
-## Repository Files
-
-| File | Purpose |
-|---|---|
-| `teensy-main-controller.ino` | Teensy 4.1 main-controller firmware |
-| `pico-encoder-panel.ino` | Raspberry Pi Pico encoder-panel firmware |
-| `pin-map.md` | Current pin assignments and DAC wiring |
-| `uart-protocol.md` | Pico-to-Teensy event protocol |
-| `build-notes.md` | Current hardware notes and next tasks |
-| `CHANGELOG.md` | Version history |
-
-## Arduino IDE
-
-For the Teensy firmware, select:
-
-```text
-Board: Teensy 4.1
-USB Type: Serial + MIDI
-```
-
-The Pico panel uses UART:
-
-```text
-TX: GP0
-RX: GP1
-Baud: 115200
-```
-
-## Versioning
-
-Repository filenames remain stable so Git history stays readable:
-
-```text
-teensy-main-controller.ino
-pico-encoder-panel.ino
-```
-
-Downloadable Arduino-ready ZIP files use versioned folder and sketch names:
-
-```text
-Lattice_Sequencer_Teensy_v0_3_7/
-└── Lattice_Sequencer_Teensy_v0_3_7.ino
-```
-
-Release notes use dotted semantic versions:
-
-```text
-v0.3.7
-```
-
-Arduino download filenames use underscores:
-
-```text
-v0_3_7
-```
+The same Pico firmware is used on both encoder panels. The Teensy identifies the panel by UART port, not by the `PANEL` value in the packet.

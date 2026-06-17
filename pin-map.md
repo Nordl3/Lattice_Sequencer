@@ -2,88 +2,49 @@
 
 ## Teensy 4.1 Main Controller
 
-| Function | Teensy 4.1 pin |
+| Function | Teensy pin |
 |---|---:|
 | Gate Out | 2 |
 | Trigger Out | 3 |
-| EDIT button | 4 |
-| RUN / STOP button | 5 |
+| LANE button | 4 |
+| RUN button | 5 |
 | SPI MOSI | 11 |
 | SPI SCK | 13 |
-| Clock-division pot / A0 | 14 |
-| Number-of-steps pot / A1 | 15 |
-| Pico UART TX5 | 20 |
-| Pico UART RX5 | 21 |
-| Pico RUN | 22 |
+| OLED SDA | 18 |
+| OLED SCL | 19 |
+| Serial5 TX, reserved | 20 |
+| Pico top panel UART RX5 | 21 |
 | Wire2 SCL | 24 |
 | Wire2 SDA | 25 |
-| DAC shared `/LDAC` | 29 |
-| DAC Left `/SYNC` | 30 |
-| DAC Right `/SYNC` | 31 |
-| External Clock In | 32 |
+| DAC1 /SYNC | 30 |
+| DAC2 /SYNC | 31 |
+| DAC8562 /LDAC | 32 |
 | Global encoder pushbutton | 33 |
-| Reserved Serial8 RX | 34 |
-| Reserved Serial8 TX | 35 |
+| Pico bottom panel UART RX8 | 34 |
+| Serial8 TX, reserved | 35 |
 | Global encoder A | 36 |
 | Global encoder B | 37 |
 | Reset In | 38 |
+| External Clock In | 39 |
+| Sequence Length pot | A0 |
+| Clock Division pot | A1 |
 
-Pins 34 and 35 are deliberately left unused for a possible Serial8 UART connection.
+The Pico panels are TX-only in this build.
 
-The global encoder pushbutton connects between pin 33 and ground. The firmware enables the Teensy internal pull-up and handles debounce in software.
+```text
+Top 4x2 Pico TX    -> Teensy RX5 pin 21
+Bottom 4x2 Pico TX -> Teensy RX8 pin 34
+```
 
-External Clock In and Reset In are logic-level test inputs. Eurorack signals must be conditioned and protected before connection to the Teensy.
+Pico RX and Pico RUN are not connected in this build.
 
-## 74AHCT125N Level Shifters
+The global encoder pushbutton, LANE button, and RUN button connect between their Teensy pin and ground. The Teensy firmware enables internal pull-ups and handles debounce in software.
 
-The Teensy control lines are 3.3 V logic. The DAC8562 devices and 74AHCT125N buffers run from the 5 V rail.
+External Clock In and Reset In are logic-level firmware inputs. Eurorack signals must be conditioned and protected before connection to the Teensy.
 
-### IC1 — left 74AHCT125N
+## Raspberry Pi Pico Encoder Panel
 
-| Teensy signal | IC1 input | IC1 output | DAC destination |
-|---|---:|---:|---|
-| pin 13 SPI SCK | pin 12 `4A` | pin 11 `4Y` | both DACs pin 7 `SCLK` |
-| pin 30 DAC Left `/SYNC` | pin 2 `1A` | pin 3 `1Y` | DAC1 pin 6 `/SYNC` |
-| pin 31 DAC Right `/SYNC` | pin 5 `2A` | pin 6 `2Y` | DAC2 pin 6 `/SYNC` |
-
-### IC2 — right 74AHCT125N
-
-| Teensy signal | IC2 input | IC2 output | DAC destination |
-|---|---:|---:|---|
-| pin 11 SPI MOSI | pin 2 `1A` | pin 3 `1Y` | both DACs pin 8 `DIN` |
-| pin 29 shared `/LDAC` | pin 5 `2A` | pin 6 `2Y` | both DACs pin 4 `/LDAC` |
-
-Power each 74AHCT125N from 5 V and add a local 100 nF bypass capacitor. Hold enabled `/OE` inputs low. Hold unused logic inputs at defined levels rather than leaving them floating.
-
-## DAC8562 Outputs
-
-| Output | DAC channel |
-|---|---|
-| CV1 / Pitch | DAC1 `VOUTA`, pin 1 |
-| CV2 / Velocity | DAC1 `VOUTB`, pin 2 |
-| CV3 | DAC2 `VOUTA`, pin 1 |
-| CV4 | DAC2 `VOUTB`, pin 2 |
-
-## DAC8562 Local Wiring
-
-For each DAC8562 adapter board:
-
-| DAC8562 pin | Signal | Connection |
-|---:|---|---|
-| 1 | `VOUTA` | analogue CV output |
-| 2 | `VOUTB` | analogue CV output |
-| 3 | `GND` | ground |
-| 4 | `/LDAC` | shared buffered `/LDAC` |
-| 5 | `/CLR` | 10 kΩ pull-up to 5 V |
-| 6 | `/SYNC` | dedicated buffered chip-select line |
-| 7 | `SCLK` | shared buffered SPI clock |
-| 8 | `DIN` | shared buffered SPI data |
-| 9 | `AVDD` | 5 V rail |
-| 10 | `VREFIN/VREFOUT` | 470 nF capacitor to ground |
-
-Add a local 100 nF bypass capacitor between `AVDD` and ground at each DAC adapter board.
-
-## Pico Encoder Panel
+Both Pico boards use the same encoder-panel firmware.
 
 | Encoder | A | B | Pushbutton |
 |---:|---:|---:|---:|
@@ -96,28 +57,81 @@ Add a local 100 nF bypass capacitor between `AVDD` and ground at each DAC adapte
 | ENC6 | GP8 | GP9 | GP10 |
 | ENC7 | GP11 | GP12 | GP13 |
 
-## Pico to Teensy UART
+All eight Pico encoder directions are currently swapped in the Pico firmware.
 
-| Pico | Teensy 4.1 |
+The Teensy firmware also has a top-level grid encoder direction setting:
+
+```cpp
+const int GRID_ENCODER_DIRECTION = -1;
+```
+
+## Pico-to-Teensy Mapping
+
+| Pico board | Teensy UART | Physical encoder range |
+|---|---|---:|
+| Top 4x2 grid | Serial5 RX, pin 21 | 1-8 |
+| Bottom 4x2 grid | Serial8 RX, pin 34 | 9-16 |
+
+The current Teensy encoder-to-step map corrects the physical row order of the current 4x4 board.
+
+## DAC8562 Wiring
+
+| Signal | Teensy pin | Destination |
+|---|---:|---|
+| MOSI | 11 | level shifter -> both DAC DIN |
+| SCK | 13 | level shifter -> both DAC SCLK |
+| DAC1 /SYNC | 30 | level shifter -> DAC1 /SYNC |
+| DAC2 /SYNC | 31 | level shifter -> DAC2 /SYNC |
+| DAC /LDAC | 32 | level shifter -> both DAC /LDAC |
+
+DAC8562 firmware configuration:
+
+```text
+SPI_MODE1
+30 MHz SPI
+internal 2.5 V reference enabled
+x2 output gain
+external shared LDAC pulse
+```
+
+DAC output map:
+
+| Output | DAC8562 channel |
 |---|---|
-| GP0 / UART TX | pin 21 / RX5 |
-| GP1 / UART RX | pin 20 / TX5 |
-| RUN | pin 22 |
-| GND | GND |
-| VSYS / VBUS | Teensy USB 5 V / VIN |
+| CV1 / Pitch | DAC1 VOUTA |
+| CV2 / Velocity | DAC1 VOUTB |
+| CV3 | DAC2 VOUTA |
+| CV4 | DAC2 VOUTB |
 
 ## MCP23017 LED Outputs
 
+The two MCP23017 devices are on `Wire2`.
+
+| Device | Address | Steps |
+|---|---|---:|
+| Left MCP23017 | `0x20` | 1-8 |
+| Right MCP23017 | `0x21` | 9-16 |
+
+### Left MCP23017, address `0x20`
+
 | Function | MCP23017 pins |
 |---|---|
-| Active playhead LEDs, steps 0–7 | GPA0–GPA7 |
-| Step-enabled LEDs, steps 0–7 | GPB7–GPB0 |
+| Playhead LEDs, steps 1-8 | GPA0-GPA7 |
+| Step enabled LEDs, steps 1-8 | GPB7-GPB0 |
 
-The enabled-state LED order is reversed so step 0 maps to GPB7 and step 7 maps to GPB0.
+### Right MCP23017, address `0x21`
+
+| Function | MCP23017 pins |
+|---|---|
+| Playhead LEDs, steps 9-16 | GPA0-GPA7 |
+| Step enabled LEDs, steps 9-16 | GPB7-GPB0 |
+
+The enabled-state LED order is reversed so step 1 maps to GPB7 and step 8 maps to GPB0 on the left chip; step 9 maps to GPB7 and step 16 maps to GPB0 on the right chip.
 
 ## I2C Devices
 
-| Device | Address |
-|---|---|
-| MCP23017 | `0x20` |
-| SSD1306 OLED | `0x3C` |
+| Bus | Pins | Device | Address |
+|---|---|---|---|
+| Wire | SDA 18, SCL 19 | SSD1309 OLED | `0x3C` |
+| Wire2 | SDA 25, SCL 24 | MCP23017 left | `0x20` |
+| Wire2 | SDA 25, SCL 24 | MCP23017 right | `0x21` |
